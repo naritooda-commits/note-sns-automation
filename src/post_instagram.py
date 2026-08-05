@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 
 import requests
 
@@ -40,6 +41,9 @@ GRAPH_API_VERSION = "v21.0"
 DEFAULT_API_BASE = f"https://graph.instagram.com/{GRAPH_API_VERSION}"
 CAPTION_MAX_LENGTH = 2200  # Instagram のキャプション上限
 REQUEST_TIMEOUT = 60
+# コンテナ（画像）の処理待ち
+CONTAINER_POLL_INTERVAL = 3
+CONTAINER_TIMEOUT = 180
 
 
 def api_base() -> str:
@@ -91,6 +95,50 @@ def _post(url: str, params: dict[str, str]) -> dict:
     if not response.ok:
         raise InstagramError(_describe_error(response))
     return response.json()
+
+
+def _wait_until_ready(
+    base: str, creation_id: str, access_token: str, timeout: float = CONTAINER_TIMEOUT
+) -> None:
+    """コンテナの処理が終わるまで待つ。
+
+    Instagram は画像をサーバー側で取得・処理してからでないと公開できない。
+    処理中に公開しようとすると code=9007「Media ID is not available」で
+    失敗するため、status_code が FINISHED になるのを待つ。
+    """
+    deadline = time.monotonic() + timeout
+    last_status = None
+
+    while time.monotonic() < deadline:
+        response = requests.get(
+            f"{base}/{creation_id}",
+            params={"fields": "status_code,status", "access_token": access_token},
+            timeout=REQUEST_TIMEOUT,
+        )
+        if not response.ok:
+            raise InstagramError(_describe_error(response))
+
+        payload = response.json()
+        status = payload.get("status_code")
+        if status != last_status:
+            logger.info("Instagram: コンテナの状態 %s", status)
+            last_status = status
+
+        if status == "FINISHED":
+            return
+        if status in ("ERROR", "EXPIRED"):
+            raise InstagramError(
+                f"コンテナの処理に失敗しました（status_code={status}）: "
+                f"{payload.get('status')}"
+                "\n  → 画像URLが公開されているか、JPEG かつ縦横比が"
+                "\n     4:5〜1.91:1 の範囲内かを確認してください。"
+            )
+        time.sleep(CONTAINER_POLL_INTERVAL)
+
+    raise InstagramError(
+        f"コンテナの処理が {timeout:.0f} 秒以内に終わりませんでした"
+        f"（最後の状態: {last_status}）。時間を置いて再実行してください。"
+    )
 
 
 def post_to_instagram(
@@ -164,7 +212,10 @@ def post_to_instagram(
             raise InstagramError(f"コンテナ作成のレスポンスに id がありません: {container}")
         logger.info("Instagram: メディアコンテナを作成しました (id=%s)", creation_id)
 
-        # 2. 公開
+        # 2. 画像の処理が終わるまで待つ（待たずに公開すると code=9007 で失敗する）
+        _wait_until_ready(base, creation_id, access_token)
+
+        # 3. 公開
         published = _post(
             f"{base}/{business_account_id}/media_publish",
             {
