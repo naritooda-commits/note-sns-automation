@@ -718,7 +718,13 @@ def resolve_public_url(eyecatch: Eyecatch) -> str | None:
 
     base = os.getenv("IMAGE_PUBLIC_BASE_URL", "").strip()
     if base:
-        url = f"{base.rstrip('/')}/{quote(eyecatch.name)}"
+        name = eyecatch.name
+        # Instagram 用に変換した JPEG を公開している場合、拡張子を差し替える
+        # （src.prepare_ig_images が images_ig/ に .jpg を作る運用）
+        extension = os.getenv("IMAGE_PUBLIC_EXTENSION", "").strip()
+        if extension:
+            name = f"{Path(name).stem}{extension if extension.startswith('.') else '.' + extension}"
+        url = f"{base.rstrip('/')}/{quote(name)}"
         logger.info("投稿に使う画像URL: %s（IMAGE_PUBLIC_BASE_URL から生成）", url)
         return url
 

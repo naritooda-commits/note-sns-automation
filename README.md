@@ -259,6 +259,38 @@ Instagram Graph API は **テキストのみの投稿に対応していません
 
 3. その URL を `IG_IMAGE_URL` に設定します。
 
+### Instagram 用の画像変換（images_ig）
+
+Instagram のフィード投稿には制約があります。
+
+- 縦横比は 4:5 〜 1.91:1 の範囲内であること
+- 公式に指定されている形式は JPEG（PNG や WebP は拒否されることがある）
+
+note 標準のアイキャッチ 1280×670 は比率 1.9104 で、上限 1.91 をわずかに超えます。
+そのため、投稿用に変換した画像を別フォルダに用意します。
+
+```bash
+python -m src.prepare_ig_images
+```
+
+`images/` の各画像を 1080×1080 の JPEG にして `images_ig/` に書き出します。
+切り抜かずに余白を足して収め、余白の色は元画像の縁から自動で決まります
+（黒背景の画像には黒、白背景の画像には白が入るので帯が目立ちません）。
+既に変換済みで元画像が更新されていないものはスキップします。
+すべて作り直したいときは `--force` を付けてください。
+
+元画像（`images/`）は変更しません。画像内テキストの読み取りは元画像に対して行い、
+Instagram に渡す URL だけが変換後の JPEG を指します。この切り替えは
+`.env` の次の2行で行っています。
+
+```
+IMAGE_PUBLIC_BASE_URL=https://raw.githubusercontent.com/<user>/<repo>/main/images_ig
+IMAGE_PUBLIC_EXTENSION=.jpg
+```
+
+新しいアイキャッチを追加したときは、`images/` に置いたあと上のコマンドを実行し、
+`images/` と `images_ig/` の両方をコミットして push してください。
+
 ### ローカル画像を投稿に使いたい場合
 
 ローカルのフォルダにしかない画像は、そのままでは Instagram に投稿できません。

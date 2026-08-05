@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 
 from src import dryrun_cache
 from src.check_rss import REPO_ROOT, Article, PostedStore, PostResult, fetch_new_articles
-from src.find_eyecatch import find_eyecatch
+from src.find_eyecatch import find_eyecatch, resolve_public_url
 from src.generate_caption import generate_captions
 from src.post_instagram import post_to_instagram
 from src.post_threads import post_to_threads
@@ -107,6 +107,12 @@ def process_article(
         logger.info("--- %s 用の投稿文 ---\n%s", platform, caption)
 
         if dry_run:
+            # 実際に投稿はしないが、画像の公開URLが解決できるかはここで確かめる
+            if platform == "instagram":
+                logger.info(
+                    "DRY_RUN: Instagram に添付される画像URL: %s",
+                    resolve_public_url(eyecatch) or "(解決できませんでした)",
+                )
             logger.info("DRY_RUN のため %s には投稿しません。", platform)
             results.append(PostResult(platform=platform, ok=False, skipped=True))
             continue
