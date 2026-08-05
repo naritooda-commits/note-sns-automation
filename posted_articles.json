@@ -287,11 +287,13 @@
     "link": "https://note.com/fast_lily4472/n/n806dbda4a1a6",
     "published": "Sun, 02 Aug 2026 22:50:51 +0900",
     "instagram": {
-      "status": "failed",
+      "status": "success",
+      "posted_at": "2026-08-05T12:06:06.791372+00:00",
+      "post_id": "17976430275110791",
+      "caption": "「即戦力だから」と、入社初日からいきなり現場に立たされていませんか。オンボーディングは新卒だけのものと思われがちですが、中途社員にこそ受け入れ設計が必要だという視点で、入社前から90日までを6段階に整理しました。プロフィールのリンクから読めます。\nhttps://note.com/fast_lily4472/n/n806dbda4a1a6",
       "image": "CH-20260805-S01_中途社員オンボーディング90日ロードマップ_正式画像.png",
       "image_source": "ai",
-      "error": "HTTP 400 code=9007 subcode=2207027: Media ID is not available",
-      "last_attempted_at": "2026-08-05T11:56:52.340962+00:00"
+      "last_attempted_at": "2026-08-05T12:06:06.791397+00:00"
     },
     "threads": {
       "status": "success",
@@ -308,11 +310,13 @@
     "link": "https://note.com/fast_lily4472/n/n96450f715680",
     "published": "Mon, 03 Aug 2026 19:38:17 +0900",
     "instagram": {
-      "status": "failed",
+      "status": "success",
+      "posted_at": "2026-08-05T12:06:18.814983+00:00",
+      "post_id": "18164821543459642",
+      "caption": "評価面談の場で「実はここが課題だった」と初めて告げられた経験、ありませんか。日頃のフィードバックがないまま評価だけを受け取ると、その内容を素直に信じにくくなるものです。そんな話を記事にまとめました。プロフィールのリンクから読めます。\nhttps://note.com/fast_lily4472/n/n96450f715680",
       "image": "3a89450c-50e8-41f1-a2c3-fbe9b7287bc1.png",
       "image_source": "ai",
-      "error": "HTTP 400 code=9007 subcode=2207027: Media ID is not available",
-      "last_attempted_at": "2026-08-05T11:57:13.049493+00:00"
+      "last_attempted_at": "2026-08-05T12:06:18.814997+00:00"
     },
     "threads": {
       "status": "success",
@@ -329,11 +333,13 @@
     "link": "https://note.com/fast_lily4472/n/n39e9075d9c5e",
     "published": "Mon, 03 Aug 2026 20:04:45 +0900",
     "instagram": {
-      "status": "failed",
-      "image": "management-role_cover_revised_approved-copy_v3.png",
-      "image_source": "ai",
-      "error": "HTTP 400 code=9007 subcode=2207027: Media ID is not available",
-      "last_attempted_at": "2026-08-05T11:57:34.439832+00:00"
+      "status": "success",
+      "posted_at": "2026-08-05T12:06:31.299972+00:00",
+      "post_id": "18568975162070464",
+      "caption": "「その確認、本当に部長がやることでしょうか。」課長が判断せず、部長が日々の会議や資料確認まで抱えてしまう。上のレイヤーが下位のレイヤーの仕事までしてしまうと、課長は育つ機会を失い、部長は本来の意思決定や他部署調整に手が回らなくなります。役割の見直し方を記事にまとめました。プロフィールのリンクから読めます。\nhttps://note.com/fast_lily4472/n/n39e9075d9c5e",
+      "image": "default_post_image.png",
+      "image_source": "default",
+      "last_attempted_at": "2026-08-05T12:06:31.299986+00:00"
     },
     "threads": {
       "status": "success",
