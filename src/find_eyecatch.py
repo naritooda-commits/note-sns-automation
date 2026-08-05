@@ -237,6 +237,19 @@ def _is_image(file_name: str) -> bool:
     return Path(file_name).suffix.lower() in IMAGE_EXTENSIONS
 
 
+def _image_id(path: Path) -> str:
+    """image_index.json のキーを作る。
+
+    リポジトリ内の画像は「images/xxx.png」のような相対パスにする。
+    絶対パスにすると Windows と GitHub Actions（Linux）で食い違い、
+    実行環境が変わるたびに全画像を読み直すことになるため。
+    """
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
 def collect_local_images(folder: str | Path | None = None) -> list[ImageCandidate]:
     """LOCAL_IMAGE_FOLDER 配下の画像を集める。"""
     folder = folder or os.getenv("LOCAL_IMAGE_FOLDER", "")
@@ -252,7 +265,7 @@ def collect_local_images(folder: str | Path | None = None) -> list[ImageCandidat
         return []
 
     candidates = [
-        ImageCandidate(image_id=str(p), name=p.name, local_path=p)
+        ImageCandidate(image_id=_image_id(p), name=p.name, local_path=p)
         for p in sorted(folder_path.rglob("*"))
         if p.is_file() and _is_image(p.name)
     ]

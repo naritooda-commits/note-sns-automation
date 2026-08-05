@@ -30,9 +30,20 @@ from src.find_eyecatch import Eyecatch, resolve_public_url
 logger = logging.getLogger(__name__)
 
 GRAPH_API_VERSION = "v21.0"
-GRAPH_API_BASE = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
+# Instagram API には2つの方式があり、接続先ホストが異なる。
+#   Instagramログイン方式 : https://graph.instagram.com/v21.0
+#     権限は instagram_business_* 系。トークンは Instagram のユーザートークン。
+#   Facebookログイン方式  : https://graph.facebook.com/v21.0
+#     権限は instagram_basic / instagram_content_publish 系。
+#     トークンは Facebook のユーザートークンで、Facebookページ経由で紐づける。
+# 投稿の手順（コンテナ作成 → 公開）はどちらも同じなので、接続先だけ切り替える。
+DEFAULT_API_BASE = f"https://graph.instagram.com/{GRAPH_API_VERSION}"
 CAPTION_MAX_LENGTH = 2200  # Instagram のキャプション上限
 REQUEST_TIMEOUT = 60
+
+
+def api_base() -> str:
+    return (os.getenv("IG_API_BASE", "").strip() or DEFAULT_API_BASE).rstrip("/")
 
 
 class InstagramError(RuntimeError):
@@ -55,9 +66,10 @@ def _describe_error(response: requests.Response) -> str:
     if code == 190 or "access token" in message.lower():
         detail += (
             "\n  → アクセストークンが無効か期限切れの可能性があります。"
-            "\n     Meta Developer の Graph API Explorer で新しいトークンを発行し、"
-            "\n     長期トークン（60日）に交換して IG_ACCESS_TOKEN を更新してください。"
-            "\n     手順は README の「アクセストークンの取得と更新」を参照。"
+            "\n     Meta Developer のアプリ →「Instagramでメッセージとコンテンツを管理」"
+            "\n     →「Instagramログインによる API設定」→「アクセストークンを生成する」で"
+            "\n     発行し直し、長期トークン（60日）に交換して IG_ACCESS_TOKEN を"
+            "\n     更新してください。手順は README の「アクセストークンの取得と更新」を参照。"
         )
     elif code in (4, 17, 32, 613):
         detail += "\n  → API のレート制限に達しています。時間を置いて再実行してください。"
@@ -134,10 +146,13 @@ def post_to_instagram(
         )
         caption = caption[:CAPTION_MAX_LENGTH]
 
+    base = api_base()
+    logger.info("Instagram API 接続先: %s", base)
+
     try:
         # 1. メディアコンテナを作成
         container = _post(
-            f"{GRAPH_API_BASE}/{business_account_id}/media",
+            f"{base}/{business_account_id}/media",
             {
                 "image_url": image_url,
                 "caption": caption,
@@ -151,7 +166,7 @@ def post_to_instagram(
 
         # 2. 公開
         published = _post(
-            f"{GRAPH_API_BASE}/{business_account_id}/media_publish",
+            f"{base}/{business_account_id}/media_publish",
             {
                 "creation_id": creation_id,
                 "access_token": access_token,

@@ -42,13 +42,14 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_BUSINESS_ACCOUNT_ID: ${{ secrets.IG_BUSINESS_ACCOUNT_ID }}
-          IG_IMAGE_URL: ${{ secrets.IG_IMAGE_URL }}
-          IMAGE_PUBLIC_BASE_URL: ${{ secrets.IMAGE_PUBLIC_BASE_URL }}
           THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
-          LOCAL_IMAGE_FOLDER: ${{ vars.LOCAL_IMAGE_FOLDER }}
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
-          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          # 画像はリポジトリ内にあるので、URL の組み立てはリポジトリ名から決まる
+          LOCAL_IMAGE_FOLDER: images
+          IG_API_BASE: https://graph.instagram.com/v21.0
+          IMAGE_PUBLIC_EXTENSION: .jpg
+          IMAGE_PUBLIC_BASE_URL: https://raw.githubusercontent.com/${{ github.repository }}/main/images_ig
+          IG_IMAGE_URL: https://raw.githubusercontent.com/${{ github.repository }}/main/assets/default_post_image.jpg
           DRY_RUN: ${{ inputs.dry_run }}
         run: python -m src.main
 

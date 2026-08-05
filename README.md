@@ -506,20 +506,13 @@ INFO DRY_RUN キャッシュを使用（API呼び出しなし）: 投稿文の�
    | `ANTHROPIC_API_KEY` | Anthropic のコンソールで発行した API キー |
    | `IG_ACCESS_TOKEN` | Instagram の長期アクセストークン |
    | `IG_BUSINESS_ACCOUNT_ID` | Instagram ビジネスアカウント ID |
-   | `IG_IMAGE_URL` | 既定画像の公開 URL |
    | `THREADS_ACCESS_TOKEN` | Threads の長期アクセストークン |
    | `THREADS_USER_ID` | Threads のユーザー ID |
 
-   アイキャッチ画像を Googleドライブやローカルから探す場合は、次も登録します。
-
-   | Secret 名 | 値 |
-   | --- | --- |
-   | `GDRIVE_FOLDER_ID` | 画像フォルダのフォルダ ID |
-   | `GOOGLE_SERVICE_ACCOUNT_JSON` | サービスアカウントの JSON の中身をそのまま貼る |
-   | `IMAGE_PUBLIC_BASE_URL` | ローカル画像を公開している場所のベース URL（使う場合のみ） |
-
-   リポジトリ内の画像フォルダを使う場合は、Secret ではなく
-   「Variables」タブに `LOCAL_IMAGE_FOLDER`（例: `images`）を登録します。
+   画像の公開 URL（`IMAGE_PUBLIC_BASE_URL` / `IG_IMAGE_URL`）と接続先は、
+   リポジトリ内の画像を使う前提でワークフロー側に直接書いてあるため、
+   Secret への登録は不要です。Googleドライブから画像を探す場合のみ、
+   `GDRIVE_FOLDER_ID` と `GOOGLE_SERVICE_ACCOUNT_JSON` を追加してください。
 
 4. 「Settings」→「Actions」→「General」→「Workflow permissions」で
    「Read and write permissions」を選んで保存します
