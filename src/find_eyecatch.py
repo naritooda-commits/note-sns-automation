@@ -613,21 +613,32 @@ def select_image_id(
     )
 
     def call_api() -> str | None:
-        try:
-            response = client.messages.create(
-                model=model,
-                max_tokens=SELECT_MAX_TOKENS,
-                system=SELECT_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}],
+        # 応答が空で返ることがあるため、空なら1度やり直す
+        for attempt in (1, 2):
+            try:
+                response = client.messages.create(
+                    model=model,
+                    max_tokens=SELECT_MAX_TOKENS,
+                    system=SELECT_SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+            except anthropic.APIError as exc:
+                logger.error("画像選定の API 呼び出しに失敗しました: %s", exc)
+                return None
+
+            text = "".join(
+                block.text
+                for block in response.content
+                if getattr(block, "type", "") == "text"
             )
-        except anthropic.APIError as exc:
-            logger.error("画像選定の API 呼び出しに失敗しました: %s", exc)
-            return None
-        return "".join(
-            block.text
-            for block in response.content
-            if getattr(block, "type", "") == "text"
-        )
+            if text.strip():
+                return text
+            logger.warning(
+                "画像選定の応答が空でした（stop_reason=%s, %d回目）。",
+                response.stop_reason,
+                attempt,
+            )
+        return None
 
     # dry-run 中は、同じタイトル・同じ候補一覧なら再度 API を呼ばない
     text = cached_call(
@@ -741,8 +752,15 @@ def find_eyecatch(title: str, link: str = "") -> Eyecatch:
 
     if image_id is None:
         result = default_eyecatch()
-        logger.info("アイキャッチ画像を決定: %s", result.describe())
-        logger.info("  根拠: 該当画像なし（%s）", reason)
+        # 既定画像はプレースホルダーなので、使われたことが埋もれないよう警告で出す
+        logger.warning(
+            "該当する画像が選ばれなかったため、既定画像で投稿されます: %s", reason
+        )
+        logger.warning(
+            "  意図した画像がある場合は image_mapping_override.json の "
+            "image に指定してください（記事: %s）",
+            title,
+        )
         return result
 
     chosen = next(c for c in candidates if c.image_id == image_id)
