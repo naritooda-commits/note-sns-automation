@@ -1,0 +1,5 @@
+{
+  "_comment": "記事URL（またはタイトル）をキーに、使いたい画像を手動で指定します。ここに指定があるとAI判定より優先されます。値はローカルの画像パス、画像ファイル名、または gdrive:{ファイルID} 形式。アンダースコアで始まるキーは無視されます。",
+  "_example_by_url": "https://note.com/example/n/n0000 -> images/eyecatch_a.png",
+  "_example_by_title": "はじめてのnote運用 -> gdrive:1AbCdEfGhIjKlMnOpQrStUvWxYz"
+}

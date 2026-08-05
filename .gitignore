@@ -1,0 +1,9 @@
+.env
+logs/
+.cache/
+.dryrun_cache.json
+service_account.json
+__pycache__/
+*.pyc
+.venv/
+venv/

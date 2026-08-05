@@ -1,0 +1,77 @@
+name: auto_post
+
+on:
+  schedule:
+    # 30分おきに実行（UTC基準。GitHub Actions の cron は混雑時に数分遅れることがある）
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "投稿せず、生成した文面だけ確認する"
+        type: boolean
+        default: false
+
+# posted_articles.json をリポジトリに書き戻すために必要
+permissions:
+  contents: write
+
+# 同時実行すると二重投稿になりうるので、必ず1本ずつ動かす
+concurrency:
+  group: auto-post
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v4
+
+      - name: Python をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: 依存ライブラリをインストール
+        run: pip install -r requirements.txt
+
+      - name: 新着記事をチェックして投稿
+        env:
+          NOTE_RSS_URL: ${{ secrets.NOTE_RSS_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_BUSINESS_ACCOUNT_ID: ${{ secrets.IG_BUSINESS_ACCOUNT_ID }}
+          IG_IMAGE_URL: ${{ secrets.IG_IMAGE_URL }}
+          IMAGE_PUBLIC_BASE_URL: ${{ secrets.IMAGE_PUBLIC_BASE_URL }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          LOCAL_IMAGE_FOLDER: ${{ vars.LOCAL_IMAGE_FOLDER }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: python -m src.main
+
+      - name: 投稿済みリストと画像インデックスをコミット
+        # 投稿に失敗した記事も「失敗した」と記録されるため、
+        # 前のステップが失敗しても状態は必ず保存する
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain posted_articles.json image_index.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add posted_articles.json image_index.json
+            git commit -m "chore: update posted_articles.json / image_index.json [skip ci]"
+            git push
+          else
+            echo "コミットすべき変更はありません。"
+          fi
+
+      - name: ログをアーティファクトとして保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-post-log-${{ github.run_id }}
+          path: logs/
+          if-no-files-found: ignore
+          retention-days: 14
