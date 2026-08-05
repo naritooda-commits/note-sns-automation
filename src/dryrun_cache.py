@@ -75,18 +75,23 @@ def cached_call(key: str, label: str, producer: Callable[[], Any]) -> Any:
     """キャッシュがあればそれを返し、無ければ producer() を実行して保存する。
 
     dry-run でないときは、キャッシュを一切使わず producer() をそのまま実行する。
-    producer() が None を返した場合（失敗時など）はキャッシュしない。
+    失敗した結果（None や空文字）は保存しない。保存してしまうと、
+    次回以降その失敗がキャッシュから返り続けてしまうため。
     """
     if not is_enabled():
         return producer()
 
     cache = _load()
-    if key in cache:
+    cached = cache.get(key)
+    if cached:
         logger.info("DRY_RUN キャッシュを使用（API呼び出しなし）: %s", label)
-        return cache[key]
+        return cached
+    if key in cache:
+        # 以前の実行で空の結果が入ってしまっていた場合は捨てて呼び直す
+        del cache[key]
 
     value = producer()
-    if value is not None:
+    if value:
         cache[key] = value
         _save()
         logger.debug("DRY_RUN キャッシュに保存しました: %s", label)

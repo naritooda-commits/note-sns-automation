@@ -21,8 +21,13 @@ from dotenv import load_dotenv
 
 from src import dryrun_cache
 from src.check_rss import REPO_ROOT, Article, PostedStore, PostResult, fetch_new_articles
-from src.find_eyecatch import find_eyecatch, resolve_public_url
-from src.generate_caption import generate_captions
+from src.find_eyecatch import (
+    caption_hint_for,
+    caption_override_for,
+    find_eyecatch,
+    resolve_public_url,
+)
+from src.generate_caption import Captions, generate_captions
 from src.post_instagram import post_to_instagram
 from src.post_threads import post_to_threads
 
@@ -74,6 +79,27 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def build_captions(article: Article, eyecatch) -> Captions:
+    """投稿文を用意する。手動で確定済みの文面があれば、それを優先して使う。
+
+    両プラットフォームとも手動指定されていれば API は呼ばない。
+    片方だけの指定なら、もう片方だけを生成する。
+    """
+    fixed = caption_override_for(article.title, article.link)
+
+    if len(fixed) == 2:
+        return Captions(instagram=[fixed["instagram"]], threads=[fixed["threads"]])
+
+    captions = generate_captions(
+        article,
+        image_heading="" if eyecatch.is_default else eyecatch.heading,
+        caption_hint=caption_hint_for(article.title, article.link),
+    )
+    for platform, text in fixed.items():
+        setattr(captions, platform, [text])
+    return captions
+
+
 def process_article(
     article: Article,
     store: PostedStore,
@@ -89,9 +115,8 @@ def process_article(
         return []
     logger.info("投稿先: %s", ", ".join(pending))
 
-    captions = generate_captions(article)
-
-    # アイキャッチ画像は記事ごとに1回だけ決め、両プラットフォームで共有する
+    # アイキャッチ画像は記事ごとに1回だけ決め、両プラットフォームで共有する。
+    # 投稿文を画像の切り口に寄せるため、画像を先に決めてから文面を作る。
     eyecatch = find_eyecatch(article.title, article.link)
     logger.info(
         "この記事に使う画像: %s / 抽出見出し「%s」/ 根拠: %s",
@@ -99,6 +124,8 @@ def process_article(
         eyecatch.heading or "(なし)",
         eyecatch.reason or "(なし)",
     )
+
+    captions = build_captions(article, eyecatch)
 
     results: list[PostResult] = []
 

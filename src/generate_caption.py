@@ -23,34 +23,65 @@ from src.dryrun_cache import cached_call, make_key
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "claude-sonnet-5"
+# thinking ブロックの分も含めて余裕を持たせる（足りないと本文が空で返る）
+MAX_TOKENS = 4000
 
 SYSTEM_PROMPT = """\
 あなたは note で発信しているクリエイターの SNS 運用担当です。
 note に公開された記事の「告知文」を日本語で書きます。
 
+書き方:
+- 読み手が「これ、うちのことだ」と感じる一文から入ってください。
+  投稿を見た人が置かれている状況を、問いかけや情景として短く描きます。
+- そのうえで記事がその話を扱っていることを伝え、最後に読んでもらう一言を添えます。
+- タイトルをそのまま引用符で貼り付けただけの文にしないでください。
+  「新しい記事を公開しました。「〇〇」」のような機械的な形は避けます。
+- 結びの言い回しは案ごとに変えてください（「続きはnoteに書きました」
+  「くわしくはnoteで」「よければnoteをのぞいてみてください」など）。
+
 厳守事項:
 - 記事本文の内容は与えられません。中身を推測して書かないでください。
-  「新しい記事を公開しました」という告知に徹してください。
-- 断定的な要約、数値、体験談などを捏造しないでください。
-- 絵文字は控えめに（1投稿につき0〜2個まで）。
-- ハッシュタグの羅列はしないでください（使うなら2〜3個まで）。
+  断定的な要約、数値、体験談、効果の約束などを捏造してはいけません。
+- 書いてよいのは、タイトル（と与えられた場合は画像のテキスト）から
+  読み取れる範囲だけです。それ以外は問いかけの形にとどめてください。
+- 煽り表現（「絶対」「必見」「9割の人が知らない」など）は使わないでください。
+- 絵文字は0〜1個。ハッシュタグを使うなら2〜3個まで。
 - 各案は本文140字以内（末尾に付けるURLは字数に含めない）。
-- 末尾は「詳しくはnoteで」に相当する一文＋記事URL で締めてください。
+- 末尾は誘導の一文＋記事URL で締めてください。
 
 トーンの違い:
 - instagram: やや丁寧・落ち着いた語り口。ですます調。
 - threads: ややカジュアル。話しかけるような、短めのテンポ。
+
+3案は切り口を変えてください（問いかけ型・状況描写型・要点提示型など）。
 
 出力は次の JSON のみ。前後に説明文やコードフェンスを付けないこと。
 {"instagram": ["案1", "案2", "案3"], "threads": ["案1", "案2", "案3"]}
 """
 
 USER_PROMPT_TEMPLATE = """\
-以下の note 記事の告知文を、Instagram 用3案・Threads 用3案つくってください。
+以下の note 記事の投稿文を、Instagram 用3案・Threads 用3案つくってください。
 
 タイトル: {title}
 URL: {link}
 公開日: {published}
+"""
+
+IMAGE_CONTEXT_TEMPLATE = """
+この投稿に添える画像には、次のテキストが入っています。
+
+    {heading}
+
+投稿文は、この画像の切り口・言葉づかいに寄せてください。画像と投稿文が
+ちぐはぐにならないようにします。タイトルの言葉をそのまま繰り返すより、
+画像が投げかけている問いに沿って書く方が自然になります。
+ただし、画像とタイトルから読み取れない事実は足さないでください。
+"""
+
+HINT_TEMPLATE = """
+運用者からの追加指示です。他の指示と矛盾する場合はこちらを優先してください。
+
+    {hint}
 """
 
 
@@ -100,10 +131,16 @@ def _extract_json(text: str) -> dict:
 
 def generate_captions(
     article: Article,
+    image_heading: str = "",
+    caption_hint: str = "",
     client: anthropic.Anthropic | None = None,
     model: str | None = None,
 ) -> Captions:
-    """記事1件分の投稿文候補を生成する。失敗してもテンプレート文を返す。"""
+    """記事1件分の投稿文候補を生成する。失敗してもテンプレート文を返す。
+
+    image_heading にアイキャッチ画像から読み取ったテキストを渡すと、
+    投稿文をその切り口に寄せる。caption_hint は運用者からの手動指示。
+    """
     api_key = os.getenv("ANTHROPIC_API_KEY", "")
     if not api_key and client is None:
         logger.error("ANTHROPIC_API_KEY が設定されていません。")
@@ -117,23 +154,39 @@ def generate_captions(
         link=article.link,
         published=article.published or "（不明）",
     )
+    if image_heading:
+        prompt += IMAGE_CONTEXT_TEMPLATE.format(heading=image_heading)
+    if caption_hint:
+        prompt += HINT_TEMPLATE.format(hint=caption_hint)
 
     def call_api() -> str | None:
-        try:
-            response = client.messages.create(
-                model=model,
-                max_tokens=1500,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}],
+        # 応答に thinking ブロックが入ると、出力上限が小さいときに本文が
+        # 空のまま打ち切られることがある。余裕を持たせ、空なら1度やり直す。
+        for attempt in (1, 2):
+            try:
+                response = client.messages.create(
+                    model=model,
+                    max_tokens=MAX_TOKENS,
+                    system=SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+            except anthropic.APIError as exc:
+                logger.error("Claude API の呼び出しに失敗しました: %s", exc)
+                return None
+
+            text = "".join(
+                block.text
+                for block in response.content
+                if getattr(block, "type", "") == "text"
             )
-        except anthropic.APIError as exc:
-            logger.error("Claude API の呼び出しに失敗しました: %s", exc)
-            return None
-        return "".join(
-            block.text
-            for block in response.content
-            if getattr(block, "type", "") == "text"
-        )
+            if text.strip():
+                return text
+            logger.warning(
+                "投稿文の応答が空でした（stop_reason=%s, %d回目）。",
+                response.stop_reason,
+                attempt,
+            )
+        return None
 
     # dry-run 中は、同じ記事なら再度 API を呼ばずキャッシュを使う
     text = cached_call(

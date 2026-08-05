@@ -213,17 +213,35 @@ python -m src.find_eyecatch --reindex
 
 ### 手動マッピング（image_mapping_override.json）
 
-AI 判定を上書きしたいときは、記事URL（またはタイトル）をキーに画像を指定します。
+AI の判定を上書きしたいときは、記事URL（またはタイトル）をキーに指定します。
+指定できるのは画像だけでなく、投稿文もです。
 
 ```json
 {
-  "https://note.com/example/n/n0000": "C:\\images\\eyecatch_a.png",
+  "https://note.com/example/n/n0000": {
+    "image": "images/eyecatch_a.png",
+    "caption_hint": "「即戦力扱い」ではなく受け入れ設計の話として書いてください。",
+    "caption_instagram": "確定した Instagram の投稿文。\nhttps://note.com/example/n/n0000",
+    "caption_threads": "確定した Threads の投稿文。\nhttps://note.com/example/n/n0000"
+  },
   "はじめてのnote運用": "gdrive:1AbCdEfGhIjKlMnOpQrStUvWxYz"
 }
 ```
 
-値にはローカルの画像パス、ファイル名、`gdrive:{ファイルID}` のいずれかを書けます。
+| キー | 効果 |
+| --- | --- |
+| `image` | この画像を使う（AI 判定より優先）。パス、ファイル名、`gdrive:{ID}` |
+| `caption_hint` | 投稿文の生成に渡す追加指示。生成はされる |
+| `caption_instagram` | Instagram の投稿文。書くと生成せず、この文面をそのまま投稿する |
+| `caption_threads` | Threads の投稿文。同上 |
+
+値を文字列だけにした場合は `image` の指定として扱われます。
 アンダースコアで始まるキー（`_comment` など）は無視されるので、メモに使えます。
+
+投稿文は実行のたびに生成されるため、事前に確認した文面と実際に投稿される文面は
+一致しません。文面を確定させたいときは `caption_instagram` /
+`caption_threads` に貼り付けてください。両方を指定した記事では
+投稿文の生成そのものが行われず、API も呼ばれません。
 
 ### 動作確認
 

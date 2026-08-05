@@ -56,6 +56,9 @@ MEDIA_TYPES = {
 }
 
 DEFAULT_MODEL = "claude-sonnet-5"
+# 応答に thinking ブロックが入ると本文が空で打ち切られるため、上限に余裕を持たせる
+VISION_MAX_TOKENS = 2000
+SELECT_MAX_TOKENS = 2000
 # Claude API に送れる画像サイズの上限に余裕を持たせる（base64 で約5MBまで）
 MAX_IMAGE_BYTES = 3_500_000
 MAX_IMAGE_EDGE = 1568  # これ以上大きい画像は縮小して送る（Pillow がある場合のみ）
@@ -163,8 +166,14 @@ class ImageIndex:
         logger.debug("画像インデックスを保存しました: %s（%d件）", self.path, len(self.entries))
 
 
-def _load_overrides() -> dict[str, str]:
-    """image_mapping_override.json を読む（記事URL/タイトル → 画像パス）。"""
+def _load_overrides() -> dict[str, dict[str, str]]:
+    """image_mapping_override.json を読む（記事URL/タイトル → 手動指定）。
+
+    値は2つの書き方を受け付ける。
+
+        "記事URL": "画像パス"
+        "記事URL": {"image": "画像パス", "caption_hint": "投稿文への追加指示"}
+    """
     if not OVERRIDE_PATH.exists():
         return {}
     try:
@@ -175,12 +184,50 @@ def _load_overrides() -> dict[str, str]:
     if not isinstance(data, dict):
         logger.error("%s はオブジェクト形式である必要があります。", OVERRIDE_PATH)
         return {}
-    # "_comment" で始まるキーは説明用なので無視する
-    return {
-        str(k): str(v)
-        for k, v in data.items()
-        if not str(k).startswith("_") and isinstance(v, str)
-    }
+
+    overrides: dict[str, dict[str, str]] = {}
+    for key, value in data.items():
+        # "_comment" で始まるキーは説明用なので無視する
+        if str(key).startswith("_"):
+            continue
+        if isinstance(value, str):
+            overrides[str(key)] = {"image": value}
+        elif isinstance(value, dict):
+            overrides[str(key)] = {
+                k: str(v) for k, v in value.items() if isinstance(v, str)
+            }
+    return overrides
+
+
+def caption_override_for(title: str, link: str = "") -> dict[str, str]:
+    """投稿文をそのまま使う手動指定を返す（確定した文面の固定用）。
+
+    image_mapping_override.json に caption_instagram / caption_threads を
+    書いておくと、その記事では投稿文を生成せず、書いた文面をそのまま使う。
+    """
+    overrides = _load_overrides()
+    entry = overrides.get(link) or overrides.get(title) or {}
+    fixed = {}
+    for platform in ("instagram", "threads"):
+        text = entry.get(f"caption_{platform}", "").strip()
+        if text:
+            fixed[platform] = text
+    if fixed:
+        logger.info(
+            "投稿文の手動指定があります（%s）。生成せずそのまま使います。",
+            "・".join(fixed),
+        )
+    return fixed
+
+
+def caption_hint_for(title: str, link: str = "") -> str:
+    """記事に対する投稿文の追加指示（手動指定）を返す。無ければ空文字。"""
+    overrides = _load_overrides()
+    entry = overrides.get(link) or overrides.get(title) or {}
+    hint = entry.get("caption_hint", "").strip()
+    if hint:
+        logger.info("投稿文への手動指示があります: %s", hint)
+    return hint
 
 
 # --- 画像の収集（ローカル / Google ドライブ） --------------------------------
@@ -411,7 +458,7 @@ def extract_heading(
         try:
             response = client.messages.create(
                 model=model,
-                max_tokens=300,
+                max_tokens=VISION_MAX_TOKENS,
                 messages=[
                     {
                         "role": "user",
@@ -556,7 +603,7 @@ def select_image_id(
         try:
             response = client.messages.create(
                 model=model,
-                max_tokens=500,
+                max_tokens=SELECT_MAX_TOKENS,
                 system=SELECT_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -616,7 +663,8 @@ def _resolve_override(
     if not overrides:
         return None
 
-    target = overrides.get(link) or overrides.get(title)
+    entry = overrides.get(link) or overrides.get(title) or {}
+    target = entry.get("image", "").strip()
     if not target:
         return None
 

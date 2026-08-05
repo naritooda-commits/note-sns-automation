@@ -2,6 +2,7 @@
 logs/
 .cache/
 .dryrun_cache.json
+preview.html
 service_account.json
 __pycache__/
 *.pyc
