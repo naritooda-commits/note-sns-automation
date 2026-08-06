@@ -661,10 +661,21 @@ def select_image_id(
     if image_id in (None, "null", ""):
         return None, reason or "該当する画像がないと判断されました。"
     image_id = str(image_id).strip()
-    if image_id not in available:
-        logger.warning("選ばれた画像IDが候補にありません: %s", image_id)
-        return None, "選ばれた画像IDが候補一覧にありませんでした。"
-    return image_id, reason
+    if image_id in available:
+        return image_id, reason
+
+    # 画像IDの代わりにファイル名だけが返ることがあるので、名前でも突き合わせる
+    by_name = [
+        candidate_id
+        for candidate_id in available
+        if Path(candidate_id).name == Path(image_id).name
+    ]
+    if len(by_name) == 1:
+        logger.info("画像IDがファイル名で返されたため、対応する候補に読み替えます。")
+        return by_name[0], reason
+
+    logger.warning("選ばれた画像IDが候補にありません: %s", image_id)
+    return None, "選ばれた画像IDが候補一覧にありませんでした。"
 
 
 # --- エントリーポイント ------------------------------------------------------
