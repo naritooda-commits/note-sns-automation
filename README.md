@@ -309,6 +309,43 @@ IMAGE_PUBLIC_EXTENSION=.jpg
 新しいアイキャッチを追加したときは、`images/` に置いたあと上のコマンドを実行し、
 `images/` と `images_ig/` の両方をコミットして push してください。
 
+### 画像フォルダの自動同期（Windows）
+
+新しいアイキャッチを追加するたびに手で push しなくて済むよう、
+受け取りフォルダを見て GitHub まで送る仕組みを用意しています。
+
+```
+デスクトップ\投稿アイキャッチ画像   ← ここに画像を入れるだけ
+        ↓ 新しい画像・更新された画像をコピー
+images\                            ← 元画像（Vision の読み取り対象）
+        ↓ 正方形 JPEG に変換
+images_ig\                         ← Instagram に渡す画像
+        ↓ コミットして push
+GitHub                             ← GitHub Actions から参照できる状態
+```
+
+実行するのは `src/sync_images.py` です。Windows のタスクスケジューラに
+`note-sns-automation-image-sync` という名前で登録し、15分おきに実行しています。
+
+- 受け取りフォルダは環境変数 `IMAGE_INBOX` で変更できます（既定はデスクトップの
+  「投稿アイキャッチ画像」）
+- 新しい画像がなければ何もせずに終わります
+- 実行結果は `logs/sync_images.log` に残ります
+- すぐ同期したいときは `sync_images.cmd` をダブルクリックします
+- push には fine-grained personal access token を使い、Windows の資格情報に
+  保存しています（`git credential approve` で登録済み）
+
+タスクの登録内容を確認・変更する場合は PowerShell から操作します。
+
+```bash
+Get-ScheduledTask -TaskName "note-sns-automation-image-sync"
+```
+
+止めたいときは、タスクスケジューラでこのタスクを無効化するか削除してください。
+
+なお、タスクからは `pythonw.exe` を直接呼んでいます。バッチファイル経由にすると
+`pythonw` の完了を待たずにタスクが終了し、同期が途中で打ち切られます。
+
 ### ローカル画像を投稿に使いたい場合
 
 ローカルのフォルダにしかない画像は、そのままでは Instagram に投稿できません。
