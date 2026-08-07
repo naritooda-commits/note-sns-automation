@@ -442,5 +442,24 @@
       "image_source": "override",
       "last_attempted_at": "2026-08-06T06:09:13.904805+00:00"
     }
+  },
+  {
+    "title": "部長の「大課長化」が会社の成長を妨げる",
+    "link": "https://note.com/fast_lily4472/n/ne4a367b8655d",
+    "published": "Fri, 07 Aug 2026 14:58:28 +0900",
+    "instagram": {
+      "status": "failed",
+      "image": "PLAN-KR-20260809-W2_大課長化_成長阻害_アイキャッチ_v3 (1).png",
+      "image_source": "ai",
+      "error": "HTTP 400 code=200 subcode=None: API access blocked.\n  → 権限不足です。instagram_basic / instagram_content_publish /\n     pages_read_engagement の各権限が付与されているか確認してください。",
+      "last_attempted_at": "2026-08-07T06:13:21.763488+00:00"
+    },
+    "threads": {
+      "status": "failed",
+      "image": "PLAN-KR-20260809-W2_大課長化_成長阻害_アイキャッチ_v3 (1).png",
+      "image_source": "ai",
+      "error": "HTTP 400 code=200: API access blocked.\n  → 権限不足です。threads_basic / threads_content_publish の\n     権限が付与されているか確認してください。",
+      "last_attempted_at": "2026-08-07T06:13:22.037499+00:00"
+    }
   }
 ]
