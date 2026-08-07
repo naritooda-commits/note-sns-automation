@@ -448,18 +448,22 @@
     "link": "https://note.com/fast_lily4472/n/ne4a367b8655d",
     "published": "Fri, 07 Aug 2026 14:58:28 +0900",
     "instagram": {
-      "status": "failed",
+      "status": "success",
+      "posted_at": "2026-08-07T07:29:30.135168+00:00",
+      "post_id": "18050289854797785",
+      "caption": "部長なのに、やっていることは課長の頃とあまり変わっていない。そんな違和感を抱いたことはありませんか。マイクロマネジメントと役割の誤認について書きました。詳しくはプロフィールのリンクから。 https://note.com/fast_lily4472/n/ne4a367b8655d",
       "image": "PLAN-KR-20260809-W2_大課長化_成長阻害_アイキャッチ_v3 (1).png",
       "image_source": "ai",
-      "error": "HTTP 400 code=200 subcode=None: API access blocked.\n  → 権限不足です。instagram_basic / instagram_content_publish /\n     pages_read_engagement の各権限が付与されているか確認してください。",
-      "last_attempted_at": "2026-08-07T07:00:26.471341+00:00"
+      "last_attempted_at": "2026-08-07T07:29:30.135188+00:00"
     },
     "threads": {
-      "status": "failed",
+      "status": "success",
+      "posted_at": "2026-08-07T07:29:44.197315+00:00",
+      "post_id": "18021446393911601",
+      "caption": "部長なのにやってることは課長のまま、みたいな人いませんか。マイクロマネジメントと役割誤認について書きました。よければnoteをのぞいてみてください。 https://note.com/fast_lily4472/n/ne4a367b8655d",
       "image": "PLAN-KR-20260809-W2_大課長化_成長阻害_アイキャッチ_v3 (1).png",
       "image_source": "ai",
-      "error": "HTTP 400 code=200: API access blocked.\n  → 権限不足です。threads_basic / threads_content_publish の\n     権限が付与されているか確認してください。",
-      "last_attempted_at": "2026-08-07T07:00:26.868957+00:00"
+      "last_attempted_at": "2026-08-07T07:29:44.197333+00:00"
     }
   }
 ]
