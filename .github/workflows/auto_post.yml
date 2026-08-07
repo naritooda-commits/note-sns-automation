@@ -46,6 +46,8 @@ jobs:
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
           # 画像はリポジトリ内にあるので、URL の組み立てはリポジトリ名から決まる
           LOCAL_IMAGE_FOLDER: images
+          # 短時間に連続投稿すると Meta 側で一時的にAPIを止められることがある
+          MAX_POSTS_PER_RUN: "1"
           IG_API_BASE: https://graph.instagram.com/v21.0
           IMAGE_PUBLIC_EXTENSION: .jpg
           IMAGE_PUBLIC_BASE_URL: https://raw.githubusercontent.com/${{ github.repository }}/main/images_ig
