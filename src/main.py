@@ -28,6 +28,7 @@ from src.find_eyecatch import (
     resolve_public_url,
 )
 from src.generate_caption import Captions, generate_captions
+from src.notify_slack import notify_result
 from src.post_instagram import post_to_instagram
 from src.post_threads import post_to_threads
 
@@ -164,6 +165,9 @@ def process_article(
             last_attempted_at=datetime.now(timezone.utc).isoformat(),
         )
         store.save()
+
+    if not dry_run:
+        notify_result(article, results, image_name=eyecatch.name)
 
     return results
 

@@ -585,6 +585,41 @@ Get-ScheduledTask -TaskName "note-sns-automation-post"
 
 ---
 
+## 8-2. Slack 通知
+
+投稿結果を Slack に通知できます。`.env` に Incoming Webhook の URL を設定すると
+有効になり、未設定なら通知せずに動きます。
+
+```
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxx/yyy/zzz
+SLACK_NOTIFY=always
+```
+
+`SLACK_NOTIFY` は `always`（投稿のたび）か `failure`（失敗時のみ）です。
+
+```
+✅ note記事を投稿しました
+新卒育成が初月で止まる会社｜人事・上司・OJTの引き継ぎが途切れる理由
+• Instagram: 投稿しました
+• Threads: 投稿しました
+画像: PLAN-NS-20260808-W2_新卒育成が初月で止まる会社_v2_1732x908.png
+https://note.com/fast_lily4472/n/nf82a38768ab3
+```
+
+失敗したときは理由の1行目が入ります。通知の送信に失敗しても投稿処理は止まりません。
+
+Webhook URL は Slack の Incoming WebHooks から取得します
+（https://slack.com/apps/A0F7XDUAZ-incoming-webhooks ）。
+GitHub Actions で使う場合は Secret `SLACK_WEBHOOK_URL` に登録してください。
+
+設定を確認したいときは、テスト通知を送れます。
+
+```bash
+python -m src.notify_slack
+```
+
+---
+
 ## 9. 二重投稿の防止のしくみ
 
 投稿の結果は `posted_articles.json` に記録されます。

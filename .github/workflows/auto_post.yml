@@ -44,6 +44,7 @@ jobs:
           IG_BUSINESS_ACCOUNT_ID: ${{ secrets.IG_BUSINESS_ACCOUNT_ID }}
           THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           # 画像はリポジトリ内にあるので、URL の組み立てはリポジトリ名から決まる
           LOCAL_IMAGE_FOLDER: images
           # 短時間に連続投稿すると Meta 側で一時的にAPIを止められることがある
