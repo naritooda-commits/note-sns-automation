@@ -28,7 +28,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from src.prepare_ig_images import SOURCE_EXTENSIONS, prepare_all
+from src.prepare_ig_images import OUTPUT_DIR, SOURCE_EXTENSIONS, prepare_all
 
 logger = logging.getLogger("sync_images")
 
@@ -100,6 +100,46 @@ def copy_new_images(inbox: Path) -> list[str]:
     return copied
 
 
+def remove_deleted_images(inbox: Path) -> list[str]:
+    """受け取りフォルダから消された画像を、リポジトリ側からも消す。
+
+    変換後の JPEG（images_ig/）も一緒に消す。
+    受け取りフォルダが見つからない、または空のときは何もしない。
+    フォルダを移動・リネームしただけのときに全消ししてしまうのを防ぐため。
+    """
+    if not inbox.is_dir():
+        return []
+
+    keep = {
+        p.name
+        for p in inbox.rglob("*")
+        if p.is_file() and p.suffix.lower() in SOURCE_EXTENSIONS
+    }
+    if not keep:
+        logger.warning(
+            "受け取りフォルダに画像が1枚もありません（%s）。"
+            "削除の同期は行いません。",
+            inbox,
+        )
+        return []
+
+    removed: list[str] = []
+    for path in sorted(IMAGES_DIR.iterdir()):
+        if not path.is_file() or path.suffix.lower() not in SOURCE_EXTENSIONS:
+            continue
+        if path.name in keep:
+            continue
+
+        path.unlink()
+        converted = OUTPUT_DIR / f"{path.stem}.jpg"
+        if converted.exists():
+            converted.unlink()
+        removed.append(path.name)
+        logger.info("削除: %s", path.name)
+
+    return removed
+
+
 def has_changes() -> bool:
     result = git("status", "--porcelain", "images", "images_ig")
     return bool(result.stdout.strip())
@@ -119,13 +159,16 @@ def main() -> int:
 
     inbox = inbox_path()
     copied = copy_new_images(inbox)
+    removed = remove_deleted_images(inbox)
     converted, _ = prepare_all()
 
-    if not copied and not converted and not has_changes():
-        logger.info("新しい画像はありません（%s）。", inbox)
+    if not copied and not removed and not converted and not has_changes():
+        logger.info("画像に変更はありません（%s）。", inbox)
         return 0
 
-    logger.info("新しい画像 %d 件、変換 %d 件。", len(copied), converted)
+    logger.info(
+        "追加 %d 件、削除 %d 件、変換 %d 件。", len(copied), len(removed), converted
+    )
 
     if args.dry_run:
         logger.info("--dry-run のため、コミットと push は行いません。")
@@ -142,7 +185,10 @@ def main() -> int:
             return 0
 
         stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-        message = f"chore: アイキャッチ画像を追加（{len(copied)}件 / {stamp}）"
+        message = (
+            f"chore: アイキャッチ画像を同期（追加{len(copied)}件 "
+            f"/ 削除{len(removed)}件 / {stamp}）"
+        )
         git("commit", "-m", message)
         git("push", "origin", "main")
         logger.info("GitHub に反映しました: %s", message)
