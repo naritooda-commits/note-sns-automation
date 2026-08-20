@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import html as html_lib
 import os
 import re
 from dataclasses import dataclass
@@ -71,6 +72,15 @@ USER_PROMPT_TEMPLATE = """\
 タイトル: {title}
 URL: {link}
 公開日: {published}
+"""
+
+SUMMARY_TEMPLATE = """
+記事の冒頭（note の RSS から取得した要約）です。
+
+    {summary}
+
+投稿文は、この要約に書かれている内容の範囲で書いてください。
+タイトルから想像した場面や、要約にない具体例を足さないでください。
 """
 
 IMAGE_CONTEXT_TEMPLATE = """
@@ -135,6 +145,17 @@ def _extract_json(text: str) -> dict:
     return json.loads(text)
 
 
+def _plain_text(html: str) -> str:
+    """RSS の要約は HTML のため、タグと余分な空白を落として渡す。"""
+    if not html:
+        return ""
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = html_lib.unescape(text)
+    # 末尾の「続きをみる」など、本文ではない導線は落とす
+    text = re.sub(r"続きをみる\s*$", "", text.strip())
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def generate_captions(
     article: Article,
     image_heading: str = "",
@@ -160,6 +181,10 @@ def generate_captions(
         link=article.link,
         published=article.published or "（不明）",
     )
+    summary = _plain_text(article.summary)
+    if summary:
+        # 長すぎると要点がぼやけるため、冒頭のみを渡す
+        prompt += SUMMARY_TEMPLATE.format(summary=summary[:1200])
     if image_heading:
         prompt += IMAGE_CONTEXT_TEMPLATE.format(heading=image_heading)
     if caption_hint:
