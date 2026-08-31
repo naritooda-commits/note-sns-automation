@@ -57,6 +57,12 @@ def setup_logging() -> None:
         root.addHandler(handler)
 
 
+# pythonw.exe（画面を出さない実行）から git を呼ぶと、呼び出しのたびに
+# 黒いコンソールが一瞬表示される。作業中に何度も光るのを防ぐため、
+# 子プロセスにウィンドウを作らせない。
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
 def git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     """リポジトリ内で git を実行する。"""
     result = subprocess.run(
@@ -66,6 +72,7 @@ def git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
         text=True,
         encoding="utf-8",
         errors="replace",
+        creationflags=NO_WINDOW,
     )
     if check and result.returncode != 0:
         raise RuntimeError(

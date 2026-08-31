@@ -1,7 +1,8 @@
 """Claude API で note 記事の告知文（Instagram / Threads 用）を生成する。
 
-有料記事だと RSS に本文が含まれないため、「本文の中身」は推測せず、
-あくまで「新しい記事を公開しました」という告知文を作る。
+RSS の要約だけではタイトルの言い換えにしかならないため、note の記事
+ページから本文を取得して材料にする（有料記事は無料部分のみ）。
+本文を取得できなかった場合は、従来どおり要約とタイトルだけで書く。
 
 単体実行:
     python -m src.generate_caption "記事タイトル" "https://note.com/xxx/n/n123"
@@ -19,6 +20,7 @@ from dataclasses import dataclass
 import anthropic
 
 from src.check_rss import Article
+from src.fetch_body import ArticleBody, fetch_body
 from src.dryrun_cache import cached_call, make_key
 
 logger = logging.getLogger(__name__)
@@ -47,10 +49,14 @@ note に公開された記事の「告知文」を日本語で書きます。
   URL は検索の手がかりとして、そのまま末尾に残します。
 
 厳守事項:
-- 記事本文の内容は与えられません。中身を推測して書かないでください。
-  断定的な要約、数値、体験談、効果の約束などを捏造してはいけません。
-- 書いてよいのは、タイトル（と与えられた場合は画像のテキスト）から
-  読み取れる範囲だけです。それ以外は問いかけの形にとどめてください。
+- 与えられた材料（タイトル・記事本文・見出し・画像のテキスト）に書かれて
+  いることだけを使ってください。数値、体験談、効果の約束などを、材料の
+  外から補って書いてはいけません。
+- 記事本文が与えられている場合は、その記事が実際に扱っている要点を投稿文に
+  反映してください。タイトルを言い換えただけの文にしないこと。読んだ人が
+  「何について書かれた記事か」を具体的に受け取れる状態にします。
+- 記事本文が与えられていない場合は、タイトルから読み取れる範囲にとどめ、
+  それ以外は問いかけの形にしてください。
 - 煽り表現（「絶対」「必見」「9割の人が知らない」など）は使わないでください。
 - 絵文字は0〜1個。ハッシュタグを使うなら2〜3個まで。
 - 各案は本文140字以内（末尾に付けるURLは字数に含めない）。
@@ -79,8 +85,28 @@ SUMMARY_TEMPLATE = """
 
     {summary}
 
+これは本文ではなく、冒頭の数行だけです。記事の主題とは限りません。
+
 投稿文は、この要約に書かれている内容の範囲で書いてください。
 タイトルから想像した場面や、要約にない具体例を足さないでください。
+
+ただし、冒頭の一場面（登場人物のセリフ、特定の出来事など）を投稿文の
+主題に据えないでください。記事が何を扱っているかはタイトルの方に表れて
+います。冒頭は導入として軽く触れる程度にとどめ、タイトルが示すテーマを
+中心に書いてください。
+"""
+
+BODY_TEMPLATE = """
+記事の本文です{partial_note}。
+
+    {body}
+"""
+
+HEADINGS_TEMPLATE = """
+記事中の見出しです。記事の要点がそのまま並んでいます。
+投稿文は、この中のどれか一つに絞って書くと要点が伝わります。
+
+{headings}
 """
 
 IMAGE_CONTEXT_TEMPLATE = """
@@ -162,11 +188,14 @@ def generate_captions(
     caption_hint: str = "",
     client: anthropic.Anthropic | None = None,
     model: str | None = None,
+    body: ArticleBody | None = None,
 ) -> Captions:
     """記事1件分の投稿文候補を生成する。失敗してもテンプレート文を返す。
 
     image_heading にアイキャッチ画像から読み取ったテキストを渡すと、
     投稿文をその切り口に寄せる。caption_hint は運用者からの手動指示。
+    body を渡さない場合は note から本文を取得する。取得できなければ
+    RSS の要約だけで生成する。
     """
     api_key = os.getenv("ANTHROPIC_API_KEY", "")
     if not api_key and client is None:
@@ -181,10 +210,24 @@ def generate_captions(
         link=article.link,
         published=article.published or "（不明）",
     )
-    summary = _plain_text(article.summary)
-    if summary:
-        # 長すぎると要点がぼやけるため、冒頭のみを渡す
-        prompt += SUMMARY_TEMPLATE.format(summary=summary[:1200])
+    if body is None:
+        body = fetch_body(article.link)
+
+    if body:
+        prompt += BODY_TEMPLATE.format(
+            body=body.text,
+            partial_note="（有料記事のため無料部分のみ）" if body.is_paid else "",
+        )
+        if body.headings:
+            prompt += HEADINGS_TEMPLATE.format(
+                headings="\n".join(f"    - {h}" for h in body.headings)
+            )
+    else:
+        # 本文を取れなかったときだけ、RSS の要約に頼る
+        summary = _plain_text(article.summary)
+        if summary:
+            # 長すぎると要点がぼやけるため、冒頭のみを渡す
+            prompt += SUMMARY_TEMPLATE.format(summary=summary[:1200])
     if image_heading:
         prompt += IMAGE_CONTEXT_TEMPLATE.format(heading=image_heading)
     if caption_hint:

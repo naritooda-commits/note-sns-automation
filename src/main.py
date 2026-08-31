@@ -28,7 +28,7 @@ from src.find_eyecatch import (
     resolve_public_url,
 )
 from src.generate_caption import Captions, generate_captions
-from src.notify_slack import notify_result
+from src.notify_slack import notify_message, notify_result
 from src.post_instagram import post_to_instagram
 from src.post_threads import post_to_threads
 
@@ -101,6 +101,64 @@ def build_captions(article: Article, eyecatch) -> Captions:
     return captions
 
 
+def should_wait_for_image(
+    article: Article, store: PostedStore, eyecatch
+) -> bool:
+    """既定画像しか無いとき、投稿を見送るかどうかを決める。
+
+    アイキャッチが同期される前に投稿してしまうと、プレースホルダー画像の
+    まま公開されてしまう（画像は後から差し替えられない）。少し待って、
+    画像が届いてから投稿する。
+
+    ただし待ち続けると永久に投稿されないため、初めて見送ってから
+    SKIP_ON_DEFAULT_IMAGE_HOURS 時間が過ぎたら、既定画像のまま投稿する。
+    """
+    if not eyecatch.is_default:
+        # 画像が見つかったので、待機の記録は消しておく
+        record = store.records.get(article.link)
+        if record and record.pop("pending_since", None):
+            store.save()
+        return False
+
+    if not _env_flag("SKIP_ON_DEFAULT_IMAGE", True):
+        return False
+
+    limit_hours = _env_int("SKIP_ON_DEFAULT_IMAGE_HOURS", 6)
+    now = datetime.now(timezone.utc)
+    record = store.records.setdefault(article.link, article.to_dict())
+    since = record.get("pending_since")
+
+    if not since:
+        record["pending_since"] = now.isoformat()
+        store.save()
+        logger.warning(
+            "対応する画像が見つからないため、今回は投稿を見送ります"
+            "（最大%d時間待って、届かなければ既定画像で投稿します）。",
+            limit_hours,
+        )
+        notify_message(
+            "⏸️ 画像が見つからないため投稿を見送りました\n"
+            f"*{article.title}*\n"
+            "アイキャッチを追加すると次回の実行で投稿されます"
+            f"（{limit_hours}時間後には既定画像で投稿します）。\n"
+            f"{article.link}"
+        )
+        return True
+
+    elapsed = (now - datetime.fromisoformat(since)).total_seconds() / 3600
+    if elapsed >= limit_hours:
+        logger.warning(
+            "画像を%.1f時間待ちましたが見つからないため、既定画像で投稿します。",
+            elapsed,
+        )
+        return False
+
+    logger.info(
+        "画像の同期を待っています（%.1f時間経過 / 上限%d時間）。", elapsed, limit_hours
+    )
+    return True
+
+
 def process_article(
     article: Article,
     store: PostedStore,
@@ -125,6 +183,9 @@ def process_article(
         eyecatch.heading or "(なし)",
         eyecatch.reason or "(なし)",
     )
+
+    if should_wait_for_image(article, store, eyecatch):
+        return []
 
     captions = build_captions(article, eyecatch)
 

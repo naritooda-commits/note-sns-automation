@@ -57,6 +57,11 @@ def _send(text: str) -> bool:
     return True
 
 
+def notify_message(text: str) -> None:
+    """任意のメッセージを通知する（投稿結果以外の連絡に使う）。"""
+    _send(text)
+
+
 def notify_result(
     article: Article,
     results: list[PostResult],
