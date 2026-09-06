@@ -128,6 +128,22 @@ HINT_TEMPLATE = """
     {hint}
 """
 
+# Threads は本文にリンクがあると配信が伸びにくい。リンクは投稿後の自己返信へ
+# 回すため、本文はそれだけで読み切れる形にする（threads のみ。instagram は従来どおり）。
+THREADS_STANDALONE_TEMPLATE = """
+threads の投稿文についてだけ、上の指示を次のとおり上書きします。
+instagram の3案は上の指示のままです。結びは「プロフィールのリンクから読めます」
+などプロフィール欄へ誘導する言い回しにし、URL を末尾に残してください。
+この上書きを instagram へ適用しないでください。
+
+- threads の本文に URL を入れないでください。リンクは投稿後の返信で別に付けます。
+- 「続きはnoteで」「くわしくはnoteに書きました」のような誘導の一文も入れないで
+  ください。誘導だけの投稿は読まれません。
+- threads の本文は、それだけを読んで意味が通る形にしてください。問いかけで終わらせず、
+  記事が扱っている要点を一つ選び、そこまで書き切ります。
+- 本文180字以内。記事本文にない事実を足さない点は上の指示と同じです。
+"""
+
 
 @dataclass
 class Captions:
@@ -171,6 +187,20 @@ def _extract_json(text: str) -> dict:
         if braced:
             text = braced.group(0)
     return json.loads(text)
+
+
+def threads_link_in_reply() -> bool:
+    """Threads のリンクを本文ではなく自己返信に付けるか。既定は有効。"""
+    value = os.getenv("THREADS_LINK_IN_REPLY", "true").strip().lower()
+    return value in ("1", "true", "yes", "on")
+
+
+def _strip_urls(text: str) -> str:
+    """本文から URL と、その前に残る誘導の一文を落とす。"""
+    text = re.sub(r"https?://\S+", "", text)
+    # 「よければnoteをのぞいてみてください。」のような結びが残ることがある
+    text = re.sub(r"[^。\n]*note[^。\n]*(でご覧|で読め|に書き|をのぞ|で詳し|で公開)[^。\n]*。\s*$", "", text)
+    return re.sub(r"[ \t]*\n\s*\n\s*$", "", text).strip()
 
 
 def _plain_text(html: str) -> str:
@@ -232,6 +262,9 @@ def generate_captions(
             prompt += SUMMARY_TEMPLATE.format(summary=summary[:1200])
     if image_heading:
         prompt += IMAGE_CONTEXT_TEMPLATE.format(heading=image_heading)
+    standalone = threads_link_in_reply()
+    if standalone:
+        prompt += THREADS_STANDALONE_TEMPLATE
     if caption_hint:
         prompt += HINT_TEMPLATE.format(hint=caption_hint)
 
@@ -288,7 +321,15 @@ def generate_captions(
 
     # モデルが URL を落とした場合に備えて、必ずリンクが入るようにする
     instagram = [c if article.link in c else f"{c}\n{article.link}" for c in instagram]
-    threads = [c if article.link in c else f"{c}\n{article.link}" for c in threads]
+    if standalone:
+        # Threads はリンクを自己返信へ回すため、本文からは URL を落とす
+        threads = [_strip_urls(c) for c in threads]
+        threads = [c for c in threads if c]
+        if not threads:
+            logger.error("Threads の投稿文が URL 除去後に空になりました。")
+            return _fallback_captions(article)
+    else:
+        threads = [c if article.link in c else f"{c}\n{article.link}" for c in threads]
 
     logger.info(
         "投稿文を生成しました（Instagram %d案 / Threads %d案）",

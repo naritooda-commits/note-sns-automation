@@ -209,7 +209,7 @@ def process_article(
         if platform == "instagram":
             result = post_to_instagram(caption, eyecatch=eyecatch)
         else:
-            result = post_to_threads(caption, eyecatch=eyecatch)
+            result = post_to_threads(caption, eyecatch=eyecatch, link=article.link)
         results.append(result)
 
         # 成功・失敗どちらもその場で記録し、途中で落ちても状態が残るようにする

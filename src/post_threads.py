@@ -37,6 +37,12 @@ class ThreadsError(RuntimeError):
     """Threads API 呼び出しの失敗。"""
 
 
+def link_in_reply() -> bool:
+    """リンクを本文ではなく自己返信に付けるか。既定は有効。"""
+    value = os.getenv("THREADS_LINK_IN_REPLY", "true").strip().lower()
+    return value in ("1", "true", "yes", "on")
+
+
 def _describe_error(response: requests.Response) -> str:
     try:
         payload = response.json().get("error", {})
@@ -70,17 +76,45 @@ def _post(url: str, params: dict[str, str]) -> dict:
     return response.json()
 
 
+def _publish(
+    user_id: str, access_token: str, params: dict[str, str], publish_delay: float
+) -> str:
+    """コンテナ作成 → 公開 の2ステップを実行し、公開後の投稿IDを返す。"""
+    container = _post(f"{THREADS_API_BASE}/{user_id}/threads", params)
+    creation_id = container.get("id")
+    if not creation_id:
+        raise ThreadsError(f"コンテナ作成のレスポンスに id がありません: {container}")
+    logger.info("Threads: コンテナを作成しました (id=%s)", creation_id)
+
+    if publish_delay:
+        time.sleep(publish_delay)
+
+    published = _post(
+        f"{THREADS_API_BASE}/{user_id}/threads_publish",
+        {"creation_id": creation_id, "access_token": access_token},
+    )
+    post_id = published.get("id")
+    if not post_id:
+        raise ThreadsError(f"公開のレスポンスに id がありません: {published}")
+    return post_id
+
+
 def post_to_threads(
     text: str,
     eyecatch: Eyecatch | None = None,
     access_token: str | None = None,
     user_id: str | None = None,
     publish_delay: float = PUBLISH_DELAY_SECONDS,
+    link: str | None = None,
 ) -> PostResult:
     """Threads に投稿する。
 
     eyecatch を渡し、かつ THREADS_ATTACH_IMAGE=true のときだけ画像を添付する。
     それ以外はテキストのみの投稿になる。
+
+    link を渡し、かつ THREADS_LINK_IN_REPLY が有効なときは、本文を投稿した後に
+    自分の投稿への返信としてリンクを付ける。本文にリンクを入れると配信が
+    伸びにくいため。返信に失敗しても本文の投稿は成功として扱う。
     """
     access_token = access_token or os.getenv("THREADS_ACCESS_TOKEN", "")
     user_id = user_id or os.getenv("THREADS_USER_ID", "")
@@ -131,29 +165,30 @@ def post_to_threads(
             )
 
     try:
-        # 1. コンテナ作成
-        container = _post(f"{THREADS_API_BASE}/{user_id}/threads", params)
-        creation_id = container.get("id")
-        if not creation_id:
-            raise ThreadsError(f"コンテナ作成のレスポンスに id がありません: {container}")
-        logger.info("Threads: コンテナを作成しました (id=%s)", creation_id)
-
-        if publish_delay:
-            time.sleep(publish_delay)
-
-        # 2. 公開
-        published = _post(
-            f"{THREADS_API_BASE}/{user_id}/threads_publish",
-            {
-                "creation_id": creation_id,
-                "access_token": access_token,
-            },
-        )
-        post_id = published.get("id")
-        if not post_id:
-            raise ThreadsError(f"公開のレスポンスに id がありません: {published}")
-
+        post_id = _publish(user_id, access_token, params, publish_delay)
         logger.info("Threads: 投稿しました (post_id=%s)", post_id)
+
+        if link and link_in_reply():
+            try:
+                reply_id = _publish(
+                    user_id,
+                    access_token,
+                    {
+                        "media_type": "TEXT",
+                        "text": link,
+                        "reply_to_id": post_id,
+                        "access_token": access_token,
+                    },
+                    publish_delay,
+                )
+                logger.info("Threads: リンクを返信で付けました (reply_id=%s)", reply_id)
+            except (ThreadsError, requests.RequestException) as exc:
+                # 本文は公開できているので、返信の失敗で全体を失敗にはしない
+                logger.warning(
+                    "Threads: リンクの返信に失敗しました。本文のみ公開されています。\n%s",
+                    exc,
+                )
+
         return PostResult(platform="threads", ok=True, post_id=post_id)
 
     except ThreadsError as exc:
