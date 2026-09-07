@@ -29,6 +29,20 @@ def is_enabled() -> bool:
     return bool(os.getenv("SLACK_WEBHOOK_URL", "").strip())
 
 
+def _mention_prefix() -> str:
+    """通知の先頭に付けるメンション。
+
+    Slack はチャンネルの通知設定が「メンションのみ」だと、Webhook からの
+    投稿では通知が鳴らない。宛先を明示して確実に届くようにする。
+    """
+    target = os.getenv("SLACK_MENTION", "").strip()
+    if not target:
+        return ""
+    if target.startswith("<") or target.startswith("@"):
+        return f"{target} "
+    return f"<@{target}> "
+
+
 def _send(text: str) -> bool:
     webhook = os.getenv("SLACK_WEBHOOK_URL", "").strip()
     if not webhook:
@@ -37,7 +51,9 @@ def _send(text: str) -> bool:
 
     try:
         response = requests.post(
-            webhook, json={"text": text}, timeout=REQUEST_TIMEOUT
+            webhook,
+            json={"text": _mention_prefix() + text},
+            timeout=REQUEST_TIMEOUT,
         )
     except requests.RequestException as exc:
         # 通知の失敗で投稿処理を止めない
