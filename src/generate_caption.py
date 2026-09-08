@@ -142,7 +142,13 @@ instagram の3案は上の指示のままです。結びは「プロフィール
 - threads の本文は、それだけを読んで意味が通る形にしてください。問いかけで終わらせず、
   記事が扱っている要点を一つ選び、そこまで書き切ります。
 - 本文180字以内。記事本文にない事実を足さない点は上の指示と同じです。
+- 本文の最後に、改行してから「記事のリンクは返信に置いています。」の一文だけを
+  そのまま置いてください。この一文は字数に含めません。宣伝の言葉を足さないこと。
 """
+
+# 返信にリンクがあることを読み手へ伝える一文。モデルが落とした場合に備えて
+# 後段で必ず付け直す。
+THREADS_LINK_NOTICE = "記事のリンクは返信に置いています。"
 
 
 @dataclass
@@ -328,6 +334,11 @@ def generate_captions(
         if not threads:
             logger.error("Threads の投稿文が URL 除去後に空になりました。")
             return _fallback_captions(article)
+        # 返信にリンクがあることは、書かないと読み手に伝わらない
+        threads = [
+            c if THREADS_LINK_NOTICE in c else f"{c}\n\n{THREADS_LINK_NOTICE}"
+            for c in threads
+        ]
     else:
         threads = [c if article.link in c else f"{c}\n{article.link}" for c in threads]
 
