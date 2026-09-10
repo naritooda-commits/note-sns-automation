@@ -28,13 +28,14 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from src.main import run
+from src.post_archive import run_archive
 from src.sync_images import git
 
 logger = logging.getLogger("auto_post_local")
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LOG_PATH = REPO_ROOT / "logs" / "auto_post_local.log"
-STATE_FILES = ("posted_articles.json", "image_index.json")
+STATE_FILES = ("posted_articles.json", "image_index.json", "archive_state.json")
 
 
 def setup_logging() -> None:
@@ -94,6 +95,13 @@ def main() -> int:
         return 1
 
     exit_code = run(dry_run=args.dry_run)
+
+    # 新着の投稿とは独立して、過去記事を Threads へ追加投稿する。
+    # ここで落ちても新着側の結果は残すため、例外は握って記録だけ残す。
+    try:
+        run_archive(dry_run=args.dry_run)
+    except Exception:  # noqa: BLE001 - 追加投稿の失敗で本流を止めない
+        logger.exception("過去記事の追加投稿でエラーが発生しました。")
 
     if not args.dry_run:
         try:
