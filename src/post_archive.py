@@ -327,7 +327,7 @@ def run_archive(dry_run: bool = False) -> None:
     logger.info(
         "過去記事を追加投稿します（%d/%d 本目・系統=%s）: %s",
         used + 1,
-        len(slots),
+        per_day,
         chosen.series,
         chosen.title,
     )
