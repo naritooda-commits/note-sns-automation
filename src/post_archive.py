@@ -74,6 +74,11 @@ def _per_day() -> int:
         return DEFAULT_PER_DAY
 
 
+def _force_now() -> bool:
+    """起動した時点で投稿するか。決まった時刻に走る環境で使う。"""
+    return os.getenv("ARCHIVE_FORCE_NOW", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def _include_paid() -> bool:
     """有料記事も追加投稿の対象にするか。既定は無料記事のみ。"""
     return os.getenv("ARCHIVE_INCLUDE_PAID", "").strip().lower() in ("1", "true", "yes", "on")
@@ -281,18 +286,31 @@ def run_archive(dry_run: bool = False) -> None:
     if per_day == 0:
         return
 
-    state = _ensure_today(load_state(), per_day)
-    used = state.get("used", 0)
-    slots = state.get("slots", [])
+    # 決まった時刻に起動する環境（GitHub Actions など）では、枠の時刻を待たずに
+    # その場で投稿する。1日の上限だけを見る。
+    if _force_now():
+        state = load_state()
+        today = date.today().isoformat()
+        if state.get("date") != today:
+            state.update({"date": today, "slots": [], "used": 0})
+        used = state.get("used", 0)
+        if used >= per_day:
+            logger.info("本日の追加投稿は済んでいます（%d/%d）。", used, per_day)
+            save_state(state)
+            return
+    else:
+        state = _ensure_today(load_state(), per_day)
+        used = state.get("used", 0)
+        slots = state.get("slots", [])
 
-    if used >= len(slots):
-        save_state(state)
-        return
+        if used >= len(slots):
+            save_state(state)
+            return
 
-    now = datetime.now().strftime("%H:%M")
-    if now < slots[used]:
-        save_state(state)
-        return
+        now = datetime.now().strftime("%H:%M")
+        if now < slots[used]:
+            save_state(state)
+            return
 
     try:
         candidates = fetch_candidates()
