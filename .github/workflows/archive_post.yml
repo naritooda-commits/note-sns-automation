@@ -1,0 +1,86 @@
+name: archive_post
+
+# 過去記事を Threads へ1日1本だけ追加投稿する。
+#
+# 新着記事の投稿（auto_post.yml）は、アイキャッチ画像と記事本文が手元から
+# push されるまで揃わないため、クラウドからは動かしていない。
+# 追加投稿はその制約に当たらない。
+#   - Threads のみで、画像を使わない
+#   - 本文は note の記事ページから取得するので RSS の制約を受けない
+# そのため、パソコンの起動に左右されないよう定期実行にしている。
+#
+# 手元の auto_post_local からは実行しない。二重投稿と
+# archive_state.json の競合を避けるため、この経路だけに寄せている。
+
+on:
+  schedule:
+    # 毎朝8時（JST）。GitHub の cron は UTC なので前日23時を指定する。
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "投稿せず、選ばれる記事と文面だけ確認する"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# 同時に走ると同じ記事を二重に投稿しうるので、必ず1本ずつ動かす
+concurrency:
+  group: archive-post
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v4
+
+      - name: Python をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: 依存ライブラリをインストール
+        run: pip install -r requirements.txt
+
+      - name: 過去記事を1本投稿
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          NOTE_URLNAME: fast_lily4472
+          ARCHIVE_ENABLED: "true"
+          ARCHIVE_POSTS_PER_DAY: "1"
+          # 決まった時刻に起動するため、枠の時刻を待たずその場で投稿する
+          ARCHIVE_FORCE_NOW: "true"
+          # 日付の判定に使う。UTC のままだと日本の朝が前日扱いになる
+          TZ: Asia/Tokyo
+          ARCHIVE_MIN_PUBLISHED: "2026-07-21"
+          ARCHIVE_REACH_THRESHOLD: "20"
+          ARCHIVE_INCLUDE_PAID: "false"
+          THREADS_LINK_IN_REPLY: "true"
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "${DRY_RUN}" = "true" ]; then
+            python -m src.post_archive --dry-run
+          else
+            python -m src.post_archive
+          fi
+
+      - name: 投稿記録をコミット
+        # 投稿に失敗した場合も枠の消化は記録されるため、必ず保存する
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain archive_state.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add archive_state.json
+            git commit -m "chore: 追加投稿の記録を更新 [skip ci]"
+            git push
+          else
+            echo "コミットすべき変更はありません。"
+          fi
