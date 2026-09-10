@@ -257,12 +257,16 @@ def _ensure_today(state: dict, per_day: int) -> dict:
     if state.get("date") == today:
         return state
 
+    # 呼び出し元は30分おきに走るため、枠も30分刻みで決める。
+    # 分単位にすると、枠の直後のループを取り逃がして最大30分ずれる。
     start, end = _window()
-    span = (end.hour * 60 + end.minute) - (start.hour * 60 + start.minute)
-    minutes = sorted(random.sample(range(span), k=min(per_day, span)))
     base = start.hour * 60 + start.minute
+    steps = ((end.hour * 60 + end.minute) - base) // 30
+    picked = sorted(random.sample(range(steps), k=min(per_day, steps)))
     state["date"] = today
-    state["slots"] = [f"{(base + m) // 60:02d}:{(base + m) % 60:02d}" for m in minutes]
+    state["slots"] = [
+        f"{(base + s * 30) // 60:02d}:{(base + s * 30) % 60:02d}" for s in picked
+    ]
     state["used"] = 0
     logger.info("本日の追加投稿の時刻: %s", ", ".join(state["slots"]) or "なし")
     return state
