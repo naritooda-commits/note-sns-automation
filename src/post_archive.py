@@ -319,6 +319,16 @@ def run_archive(dry_run: bool = False) -> None:
     caption = generate_captions(article, caption_hint=RETRY_HINT).pick("threads", 0)
     logger.info("--- threads 用の投稿文（過去記事）---\n%s", caption)
 
+    # 生成に失敗するとテンプレート文（本文にURLを含む定型文）が返る。
+    # 追加投稿は読み物として出すものなので、その状態では投稿しない。
+    if "http" in caption or caption.lstrip().startswith("noteに新しい記事"):
+        logger.error(
+            "投稿文の生成に失敗したとみられるため、追加投稿を見送ります。\n%s", caption
+        )
+        state["used"] = used + 1
+        save_state(state)
+        return
+
     if dry_run:
         logger.info("DRY_RUN のため投稿しません。")
         return
