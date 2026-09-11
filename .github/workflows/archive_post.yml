@@ -52,7 +52,8 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
-          NOTE_URLNAME: fast_lily4472
+          # 投稿した文面とURLをSlackへ流し、そこで内容を確認する
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}NOTE_URLNAME: fast_lily4472
           ARCHIVE_ENABLED: "true"
           ARCHIVE_POSTS_PER_DAY: "1"
           # 決まった時刻に起動するため、枠の時刻を待たずその場で投稿する
