@@ -96,9 +96,12 @@ def main() -> int:
 
     exit_code = run(dry_run=args.dry_run)
 
-    # 過去記事の追加投稿は GitHub Actions（archive_post.yml）が毎朝担当する。
-    # パソコンの起動に左右されないようにするためで、ここでは実行しない。
-    # 二重投稿と archive_state.json の競合を避けるため、両方から動かさない。
+    # 過去記事の追加投稿は GitHub Actions（archive_post.yml）だけが行う。
+    #
+    # 一度は両方から動かしたが、2026-09-11 に同じ記事が二重投稿された。
+    # 記録（archive_state.json）の共有が git 経由のため、クラウドが投稿して
+    # からコミットが届くまでの間に手元が走ると、未投稿と判断してしまう。
+    # 経路を1つに寄せない限り、このすり抜けは防げない。
 
     if not args.dry_run:
         try:

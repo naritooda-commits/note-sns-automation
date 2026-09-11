@@ -26,6 +26,7 @@ import requests
 
 from src.check_rss import Article
 from src.generate_caption import generate_captions
+from src.notify_slack import notify_message
 from src.post_threads import post_to_threads
 
 logger = logging.getLogger(__name__)
@@ -179,6 +180,22 @@ def _reached_links(threshold: int) -> set[str]:
     if unknown:
         logger.info("閲覧数を取得できなかった投稿が%d件あり、対象から外しました。", unknown)
     return reached
+
+
+def _permalink(post_id: str | None) -> str:
+    """投稿のURL。取れなければ空文字を返す（通知のためだけに使う）。"""
+    token = os.getenv("THREADS_ACCESS_TOKEN", "")
+    if not post_id or not token:
+        return ""
+    try:
+        payload = requests.get(
+            f"https://graph.threads.net/v1.0/{post_id}"
+            f"?fields=permalink&access_token={token}",
+            timeout=REQUEST_TIMEOUT,
+        ).json()
+        return payload.get("permalink", "")
+    except (requests.RequestException, ValueError):
+        return ""
 
 
 def _views_of(post_id: str, token: str) -> int | None:
@@ -343,6 +360,10 @@ def run_archive(dry_run: bool = False) -> None:
         logger.error(
             "投稿文の生成に失敗したとみられるため、追加投稿を見送ります。\n%s", caption
         )
+        notify_message(
+            "⚠️ 過去記事の追加投稿を見送りました（投稿文の生成に失敗）\n"
+            f"対象: {chosen.title}\n生成された文面: {caption[:200]}"
+        )
         state["used"] = used + 1
         save_state(state)
         return
@@ -355,6 +376,10 @@ def run_archive(dry_run: bool = False) -> None:
     if not result.ok:
         # 失敗しても再試行せず、翌日の枠に回す（連続で叩かない）
         logger.error("追加投稿に失敗しました。今日はこれ以上試みません。\n%s", result.error)
+        notify_message(
+            "⚠️ 過去記事の追加投稿に失敗しました\n"
+            f"対象: {chosen.title}\n{result.error}"
+        )
         state["used"] = used + 1
         save_state(state)
         return
@@ -372,6 +397,17 @@ def run_archive(dry_run: bool = False) -> None:
     state["used"] = used + 1
     save_state(state)
     logger.info("追加投稿しました (post_id=%s)", result.post_id)
+
+    # 投稿の確認はSlackで行う。文面と投稿URLを流し、おかしければ
+    # その場で消せるようにする（削除はAPIに権限がないため手作業）。
+    notify_message(
+        "📮 過去記事を追加投稿しました（Threads）\n"
+        f"記事: {chosen.title}\n"
+        f"系統: {chosen.series}\n\n"
+        f"{caption}\n\n"
+        f"投稿: {_permalink(result.post_id) or result.post_id}\n"
+        f"記事URL: {chosen.link}"
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover - 手動確認用
