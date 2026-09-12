@@ -16,6 +16,10 @@ on:
   schedule:
     # 毎朝8時（JST）。GitHub の cron は UTC なので前日23時を指定する。
     - cron: "0 23 * * *"
+    # 【一時】9/13(日)の夜だけ、週末夜の到達を見るための追加1本。
+    # 12:00 UTC = 21:00 JST。9月13日のみ発火する。
+    # 検証が終わったら、この cron と下の ARCHIVE_POSTS_PER_DAY の分岐を消すこと。
+    - cron: "0 12 13 9 *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -56,7 +60,8 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           NOTE_URLNAME: fast_lily4472
           ARCHIVE_ENABLED: "true"
-          ARCHIVE_POSTS_PER_DAY: "1"
+          # 9/13夜の追加分だけ上限を2にする（朝1本を消化済みのため）
+          ARCHIVE_POSTS_PER_DAY: ${{ github.event.schedule == '0 12 13 9 *' && '2' || '1' }}
           # 決まった時刻に起動するため、枠の時刻を待たずその場で投稿する
           ARCHIVE_FORCE_NOW: "true"
           # 日付の判定に使う。UTC のままだと日本の朝が前日扱いになる
