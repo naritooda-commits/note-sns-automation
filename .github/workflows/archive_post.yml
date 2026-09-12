@@ -82,7 +82,19 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add archive_state.json
             git commit -m "chore: 追加投稿の記録を更新 [skip ci]"
-            git push
+            # 画像同期など別の処理が先に push していると弾かれる。
+            # 記録が残らないと翌日に同じ記事を再投稿してしまうため、
+            # 取り込んで数回やり直す。
+            for i in 1 2 3; do
+              if git push; then
+                echo "投稿記録を保存しました。"
+                exit 0
+              fi
+              echo "push が弾かれました。取り込んで再試行します（${i}回目）"
+              git pull --rebase origin main
+            done
+            echo "::error::投稿記録を保存できませんでした。翌日に同じ記事が再投稿される可能性があります。"
+            exit 1
           else
             echo "コミットすべき変更はありません。"
           fi
