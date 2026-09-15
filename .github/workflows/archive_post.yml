@@ -14,8 +14,11 @@ name: archive_post
 
 on:
   schedule:
-    # 毎朝8時（JST）。GitHub の cron は UTC なので前日23時を指定する。
-    - cron: "0 23 * * *"
+    # 毎日18時（JST）。GitHub の cron は UTC なので9時を指定する。
+    # 2026-09-15 に朝8時から変更。朝と夜で再生数の中央値はほぼ同じ（約300）だが、
+    # 夜は4本とも200〜360に収まり外れがなかったため。
+    # GitHub の定期実行は最大3時間ほど遅れるが、18時なら遅れても日付をまたがない。
+    - cron: "0 9 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
