@@ -19,6 +19,9 @@ on:
     # 夜は4本とも200〜360に収まり外れがなかったため。
     # GitHub の定期実行は最大3時間ほど遅れるが、18時なら遅れても日付をまたがない。
     - cron: "0 9 * * *"
+    # 日曜だけ朝8時（JST）にも1本出す。土曜23時（UTC）＝日曜8時（JST）。
+    # 2026-09-15 追加。9/13(日)朝の投稿が再生921と過去記事投稿で最多だったため。
+    - cron: "0 23 * * 6"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -70,6 +73,10 @@ jobs:
           THREADS_LINK_IN_REPLY: "true"
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
+          # 日曜は朝と18時の2本。それ以外の曜日は1本
+          if [ "$(date +%u)" = "7" ]; then
+            export ARCHIVE_POSTS_PER_DAY=2
+          fi
           if [ "${DRY_RUN}" = "true" ]; then
             python -m src.post_archive --dry-run
           else
