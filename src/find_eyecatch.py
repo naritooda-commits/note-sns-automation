@@ -56,6 +56,17 @@ MEDIA_TYPES = {
 }
 
 DEFAULT_MODEL = "claude-sonnet-5"
+# 画像の読み取りと選定は、書かれている文字を写すことと、記事名との一致を
+# 見るだけの作業なので、安いモデルで足りる。投稿文の生成は
+# ANTHROPIC_MODEL（既定 claude-sonnet-5）のままにしている。
+DEFAULT_IMAGE_MODEL = "claude-haiku-4-5-20251001"
+
+
+def image_model() -> str:
+    """画像の読み取り・選定に使うモデル。"""
+    return os.getenv("ANTHROPIC_IMAGE_MODEL", "").strip() or DEFAULT_IMAGE_MODEL
+
+
 # 応答に thinking ブロックが入ると本文が空で打ち切られるため、上限に余裕を持たせる
 VISION_MAX_TOKENS = 2000
 SELECT_MAX_TOKENS = 2000
@@ -547,7 +558,7 @@ def update_image_index(
         return index
 
     client = client or anthropic.Anthropic(api_key=api_key)
-    model = model or os.getenv("ANTHROPIC_MODEL") or DEFAULT_MODEL
+    model = model or image_model()
 
     logger.info("新しい画像%d件を Claude Vision で読み取ります。", len(pending))
     scanned = 0
@@ -602,7 +613,7 @@ def select_image_id(
         return None, "ANTHROPIC_API_KEY が未設定のため、画像を選定できません。"
 
     client = client or anthropic.Anthropic(api_key=api_key)
-    model = model or os.getenv("ANTHROPIC_MODEL") or DEFAULT_MODEL
+    model = model or image_model()
 
     listing = "\n".join(
         f"- {image_id} : {heading}" for image_id, heading in available.items()
