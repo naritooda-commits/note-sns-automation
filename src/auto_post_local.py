@@ -96,7 +96,7 @@ def main() -> int:
 
     exit_code = run(dry_run=args.dry_run)
 
-    # 過去記事の追加投稿は GitHub Actions（archive_post.yml）だけが行う。
+    # 過去記事の追加投稿は、別タスク（src.archive_local）だけが行う。
     #
     # 一度は両方から動かしたが、2026-09-11 に同じ記事が二重投稿された。
     # 記録（archive_state.json）の共有が git 経由のため、クラウドが投稿して
