@@ -56,11 +56,21 @@ SERIES_ORDER = ["中途", "新卒", "管理職", "辞める", "その他"]
 
 # 一度投稿した記事を出し直すため、前回と同じ入り方にならないようにする
 RETRY_HINT = (
-    "この記事は一度投稿しており、今回は切り口を変えた2度目の投稿です。"
-    "記事の中で前回とは別の要点を一つ選び、そこだけを扱ってください。"
+    "この記事は一度投稿しており、今回は2度目の投稿です。"
+    "変えるのは「どの場面から書くか」「誰の立場から書くか」だけです。"
+    "記事のタイトルが示すテーマからは離れないでください。"
+    "別の要点を探すうちに、タイトルと関係のない話になるのがいちばん困ります。"
+    "書き終えたら、タイトルを読んだ人がこの投稿を見て"
+    "「同じ記事の話だ」と分かるか確かめてください。"
     "タイトルの言い換えから入らず、本文中の具体的な場面や条件から入ってください。"
-    "ただし切り口を変えることより、本文と食い違わないことを優先してください。"
-    "本文の条件・主語・因果を変えてまで別の要点にする必要はありません。"
+    "切り口を変えることより、本文と食い違わないことを優先してください。"
+    "本文の条件・主語・因果は変えないでください。"
+)
+
+PREVIOUS_HINT = (
+    "\n\n前回この記事で投稿した文面です。\n\n    {previous}\n\n"
+    "同じ場面・同じ言い回しは避けてください。"
+    "ただし主題は同じです。別のテーマに移らないでください。"
 )
 
 
@@ -351,7 +361,18 @@ def run_archive(dry_run: bool = False) -> None:
 
     article = Article(title=chosen.title, link=chosen.link, published=chosen.published)
     # 同じ記事の2度目なので、前回と同じ切り口にならないようにする
-    caption = generate_captions(article, caption_hint=RETRY_HINT).pick("threads", 0)
+    # 前回の文面を渡さないと、別の切り口を探すうちに記事の主題から
+    # 離れてしまう（2026-10-01 に発生）。何を書いたかを示して避けさせる。
+    hint = RETRY_HINT
+    previous = [
+        h.get("caption", "")
+        for h in state.get("history", [])
+        if h.get("link") == chosen.link and h.get("caption")
+    ]
+    if previous:
+        hint += PREVIOUS_HINT.format(previous=previous[-1])
+
+    caption = generate_captions(article, caption_hint=hint).pick("threads", 0)
     logger.info("--- threads 用の投稿文（過去記事）---\n%s", caption)
 
     # 生成に失敗するとテンプレート文（本文にURLを含む定型文）が返る。
