@@ -1630,11 +1630,13 @@
       "last_attempted_at": "2026-10-05T02:00:51.566856+00:00"
     },
     "threads": {
-      "status": "failed",
+      "status": "success",
+      "posted_at": "2026-10-05T02:30:56.332971+00:00",
+      "post_id": "18559608511073546",
+      "caption": "誤出荷の翌日、確認欄が増え、承認印が増え、報告書が増える。次のミスが起きると、またチェック項目が足される。原因を直さないまま、ルールだけが積み重なっていきます。",
       "image": "P1-rule-growth-eyecatch-v3-1734x907.png",
       "image_source": "ai",
-      "error": "HTTP 400 code=190: Error validating access token: The user has not authorized application 1516299729818277.\n  → アクセストークンが無効か期限切れの可能性があります。\n     Threads の設定からトークンを再発行し、長期トークン（60日）に交換して\n     THREADS_ACCESS_TOKEN を更新してください。README を参照。",
-      "last_attempted_at": "2026-10-05T02:00:51.799896+00:00"
+      "last_attempted_at": "2026-10-05T02:30:56.333000+00:00"
     }
   }
 ]
