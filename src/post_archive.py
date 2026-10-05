@@ -38,6 +38,13 @@ POSTED_PATH = REPO_ROOT / "posted_articles.json"
 CONTENTS_API = "https://note.com/api/v2/creators/{urlname}/contents?kind=note&page={page}"
 REQUEST_TIMEOUT = 30
 
+# 失敗したときは枠を使わずに置いておき、これだけ時間をおいてから次を試す。
+# トークン切れやネットワーク断のように、時間をおけば直る失敗を拾い直すため。
+FAILURE_COOLDOWN_MINUTES = 30
+
+# ただし何度も叩き続けない。1日にこれだけ失敗したら、その日は諦める。
+MAX_FAILURES_PER_DAY = 3
+
 # 3月の記事は書き方が現在と大きく違い、5ヶ月で53ビュー・スキ0という実績のため
 # 対象に含めない。再開後（2026-07-21）の記事だけを使う。
 DEFAULT_MIN_PUBLISHED = "2026-07-21"
@@ -283,6 +290,46 @@ def pick_next(candidates: list[Candidate], state: dict) -> Candidate | None:
     return None
 
 
+def _record_failure(state: dict) -> None:
+    """失敗を記録する。枠（used）は使わないので、同じ日のうちに拾い直せる。"""
+    state["failures"] = state.get("failures", 0) + 1
+    state["last_failure_at"] = datetime.now().astimezone().isoformat()
+
+
+def _skip_after_failure(state: dict) -> bool:
+    """直前の失敗を受けて、今回は見送るか。"""
+    failures = state.get("failures", 0)
+    if failures == 0:
+        return False
+
+    if failures >= MAX_FAILURES_PER_DAY:
+        logger.info(
+            "本日は %d 回続けて失敗したため、これ以上は試みません。", failures
+        )
+        return True
+
+    last = state.get("last_failure_at")
+    if not last:
+        return False
+
+    try:
+        failed_at = datetime.fromisoformat(last)
+    except ValueError:
+        return False
+
+    minutes = (datetime.now().astimezone() - failed_at).total_seconds() / 60
+    if minutes < FAILURE_COOLDOWN_MINUTES:
+        logger.info(
+            "直前の失敗から %.0f 分しか経っていないため見送ります（%d 分あけます）。",
+            minutes,
+            FAILURE_COOLDOWN_MINUTES,
+        )
+        return True
+
+    logger.info("直前の失敗から %.0f 分経ったので、もう一度試します。", minutes)
+    return False
+
+
 def _ensure_today(state: dict, per_day: int) -> dict:
     """日付が変わっていたら、その日の投稿時刻を引き直す。"""
     today = date.today().isoformat()
@@ -300,6 +347,8 @@ def _ensure_today(state: dict, per_day: int) -> dict:
         f"{(base + s * 30) // 60:02d}:{(base + s * 30) % 60:02d}" for s in picked
     ]
     state["used"] = 0
+    state["failures"] = 0
+    state.pop("last_failure_at", None)
     logger.info("本日の追加投稿の時刻: %s", ", ".join(state["slots"]) or "なし")
     return state
 
@@ -319,10 +368,14 @@ def run_archive(dry_run: bool = False) -> None:
         state = load_state()
         today = date.today().isoformat()
         if state.get("date") != today:
-            state.update({"date": today, "slots": [], "used": 0})
+            state.update({"date": today, "slots": [], "used": 0, "failures": 0})
+            state.pop("last_failure_at", None)
         used = state.get("used", 0)
         if used >= per_day:
             logger.info("本日の追加投稿は済んでいます（%d/%d）。", used, per_day)
+            save_state(state)
+            return
+        if _skip_after_failure(state):
             save_state(state)
             return
     else:
@@ -336,6 +389,10 @@ def run_archive(dry_run: bool = False) -> None:
 
         now = datetime.now().strftime("%H:%M")
         if now < slots[used]:
+            save_state(state)
+            return
+
+        if _skip_after_failure(state):
             save_state(state)
             return
 
@@ -385,7 +442,7 @@ def run_archive(dry_run: bool = False) -> None:
             "⚠️ 過去記事の追加投稿を見送りました（投稿文の生成に失敗）\n"
             f"対象: {chosen.title}\n生成された文面: {caption[:200]}"
         )
-        state["used"] = used + 1
+        _record_failure(state)
         save_state(state)
         return
 
@@ -395,13 +452,20 @@ def run_archive(dry_run: bool = False) -> None:
 
     result = post_to_threads(caption, link=chosen.link)
     if not result.ok:
-        # 失敗しても再試行せず、翌日の枠に回す（連続で叩かない）
-        logger.error("追加投稿に失敗しました。今日はこれ以上試みません。\n%s", result.error)
+        # 枠は使わずに残し、FAILURE_COOLDOWN_MINUTES だけおいてから試し直す。
+        # トークン切れで1回失敗しただけで、その日の投稿が丸ごと消えていた
+        #（2026-10-05 に発生）。連投を避けつつ、直る失敗は拾えるようにする。
+        logger.error(
+            "追加投稿に失敗しました。%d 分後にもう一度試します。\n%s",
+            FAILURE_COOLDOWN_MINUTES,
+            result.error,
+        )
         notify_message(
             "⚠️ 過去記事の追加投稿に失敗しました\n"
-            f"対象: {chosen.title}\n{result.error}"
+            f"対象: {chosen.title}\n{result.error}\n"
+            f"_{FAILURE_COOLDOWN_MINUTES}分後に自動で試し直します。_"
         )
-        state["used"] = used + 1
+        _record_failure(state)
         save_state(state)
         return
 
@@ -416,6 +480,8 @@ def run_archive(dry_run: bool = False) -> None:
         }
     )
     state["used"] = used + 1
+    state["failures"] = 0
+    state.pop("last_failure_at", None)
     save_state(state)
     logger.info("追加投稿しました (post_id=%s)", result.post_id)
 
